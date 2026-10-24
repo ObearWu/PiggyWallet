@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 私人帳本：不讓搜尋引擎收錄（robots.txt 也擋了一次） -->
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>大小豬錢包</title>
+<meta name="theme-color" content="#f27a9b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="大小豬錢包">
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body>
+<div id="wakeBanner" class="banner" hidden>🐷 伺服器剛睡醒，稍等幾秒…</div>
+<div id="offlineBanner" class="banner warn" hidden>目前顯示的是上次的資料，連線恢復後會自動更新</div>
+
+<!-- 登入 -->
+<section id="loginView" class="view login" hidden>
+  <div class="login-card">
+    <div class="logo">🐷🐽</div>
+    <h1>大小豬錢包</h1>
+    <p class="muted">只有我們兩個人的記帳本</p>
+    <div id="googleBtn"></div>
+    <p id="loginMsg" class="error"></p>
+  </div>
+</section>
+
+<!-- 首頁：群組列表 -->
+<section id="homeView" class="view" hidden>
+  <header class="topbar">
+    <h1>🐷 大小豬錢包</h1>
+    <button class="icon-btn" id="settingsBtn" aria-label="設定">⚙️</button>
+  </header>
+  <div id="overall" class="overall"></div>
+  <div class="section-head">
+    <h2>群組</h2>
+    <button class="btn small" id="newGroupBtn">＋ 新群組</button>
+  </div>
+  <ul id="groupList" class="card-list"></ul>
+  <details id="archivedWrap" class="archived" hidden>
+    <summary>已封存的群組</summary>
+    <ul id="archivedList" class="card-list"></ul>
+  </details>
+</section>
+
+<!-- 群組頁 -->
+<section id="groupView" class="view" hidden>
+  <header class="topbar">
+    <button class="icon-btn" id="backBtn" aria-label="返回">‹</button>
+    <h1 id="groupTitle"></h1>
+    <button class="icon-btn" id="groupSettingsBtn" aria-label="群組設定">⋯</button>
+  </header>
+  <div id="balanceCard" class="balance-card"></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="list" role="tab">明細</button>
+    <button class="tab" data-tab="stats" role="tab">統計</button>
+  </nav>
+  <div id="tabList"></div>
+  <div id="tabStats" hidden></div>
+  <button class="fab" id="addExpenseBtn" aria-label="記一筆">＋</button>
+</section>
+
+<!-- 設定 -->
+<section id="settingsView" class="view" hidden>
+  <header class="topbar">
+    <button class="icon-btn" data-back aria-label="返回">‹</button>
+    <h1>設定</h1>
+    <span class="icon-btn"></span>
+  </header>
+  <div class="panel">
+    <label class="field">我的暱稱
+      <div class="row">
+        <input id="myName" maxlength="20">
+        <button class="btn small" id="saveNameBtn">儲存</button>
+      </div>
+    </label>
+    <p class="muted small" id="myEmail"></p>
+  </div>
+  <div class="section-head"><h2>收款方式</h2><button class="btn small" id="newMethodBtn">＋ 新增</button></div>
+  <p class="muted small pad">還款時對方會看到你的收款方式，不用每次重傳帳號。</p>
+  <div id="methodList"></div>
+  <div class="panel center">
+    <button class="btn ghost danger" id="logoutBtn">登出</button>
+  </div>
+</section>
+
+<!-- 底部彈出表單（支出、還款、群組、收款方式共用） -->
+<div id="sheetBackdrop" class="backdrop" hidden></div>
+<div id="sheet" class="sheet" role="dialog" aria-modal="true" hidden>
+  <div class="sheet-handle"></div>
+  <div id="sheetBody"></div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
