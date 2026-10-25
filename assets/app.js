@@ -116,16 +116,64 @@ class ApiError extends Error {
   constructor(message, status, data) { super(message); this.status = status; this.data = data || {}; }
 }
 
-async function api(path, { method = "GET", body } = {}) {
+// fetch 加上逾時。沒有逾時的話，卡住的請求會一直掛著，畫面就停在「登入中…」
+// （2026-10-25 iPhone 冷啟動時實際發生：請求從沒到達伺服器，三分鐘後才失敗）。
+async function fetchWithTimeout(url, options, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try { return await fetch(url, { ...options, signal: ctrl.signal }); } finally { clearTimeout(timer); }
+}
+
+/* 確認伺服器醒著。Render 免費方案閒置 15 分鐘會休眠，喚醒要幾十秒；
+ * 這段期間送出的請求可能卡住或失敗，所以先用不碰資料庫的 /api/health
+ * 把它叫醒、確定能回應，再送真正的請求。最近 10 分鐘內有成功回應過就直接跳過。 */
+const AWAKE_FOR_MS = 10 * 60 * 1000;
+let lastContact = 0;
+let waking = null;
+
+function ensureAwake() {
+  if (Date.now() - lastContact < AWAKE_FOR_MS) return Promise.resolve();
+  if (waking) return waking;
+  waking = (async () => {
+    trackStart();
+    const deadline = Date.now() + 120_000;
+    try {
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetchWithTimeout(API_BASE + "/api/health", {}, 15_000);
+          if (res.ok) { lastContact = Date.now(); return; }
+        } catch (e) { /* 逾時或連線失敗：還在開機，繼續等 */ }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      throw new ApiError("伺服器一直沒有回應，請稍後再試", 0);
+    } finally { trackEnd(); waking = null; }
+  })();
+  return waking;
+}
+
+/* retry：連線失敗或逾時時，先確認伺服器醒著再重送幾次。只給「重送也不會
+ * 多記一筆帳」的請求用（讀取、登入）；新增支出這類寫入不自動重送，因為第一次
+ * 可能其實已經寫進去、只是回應沒收到。寫入前的 ensureAwake 已經避開冷啟動。 */
+async function api(path, { method = "GET", body, retry = method === "GET" ? 2 : 0 } = {}) {
+  await ensureAwake();
   const headers = { "Content-Type": "application/json" };
   const token = store.get(TOKEN_KEY);
   if (token) headers.Authorization = `Bearer ${token}`;
   trackStart();
   let res;
   try {
-    res = await fetch(API_BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  } catch (e) {
-    throw new ApiError("連不上伺服器，請確認網路後再試一次", 0);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetchWithTimeout(API_BASE + path,
+          { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }, 25_000);
+        lastContact = Date.now();
+        break;
+      } catch (e) {
+        if (attempt >= retry) throw new ApiError("連不上伺服器，請確認網路後再試一次", 0);
+        lastContact = 0;
+        await ensureAwake();
+      }
+    }
   } finally { trackEnd(); }
   let data = {};
   try { data = await res.json(); } catch (e) {}
@@ -155,7 +203,8 @@ function renderGoogleButton() {
 async function onGoogleCredential(resp) {
   $("loginMsg").textContent = "登入中…";
   try {
-    const data = await api("/auth/login", { method: "POST", body: { id_token: resp.credential } });
+    // Google 的憑證一小時內都有效，重送只會多建一個 session，可以放心重試
+    const data = await api("/auth/login", { method: "POST", body: { id_token: resp.credential }, retry: 2 });
     store.set(TOKEN_KEY, data.session_token);
     $("loginMsg").textContent = "";
     await loadBootstrap();
@@ -759,8 +808,8 @@ window.addEventListener("hashchange", () => { closeSheet(); route(); });
 
 (function boot() {
   // 頁面開啟時預熱：先叫醒 Render，使用者看畫面、按按鈕的同時它就在開機了。
-  // 刻意不經過 api()：這支不需要等，也不該觸發「伺服器剛睡醒」提示。
-  fetch(API_BASE + "/api/health").catch(() => {});
+  // 之後的 api() 會共用這個喚醒流程，不會重複打。
+  ensureAwake().catch(() => {});
 
   const cached = store.json(BOOT_KEY);
   if (store.get(TOKEN_KEY) && cached) applyBootstrap(cached);
